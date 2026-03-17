@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FLAN-T5 Question Answering</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f14;
+      --panel: #13161e;
+      --border: #1e2330;
+      --accent: #00e5a0;
+      --accent2: #4f7cff;
+      --text: #e8eaf0;
+      --muted: #5a6070;
+      --error: #ff5f6d;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px 80px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 700px; height: 500px;
+      background: radial-gradient(ellipse, rgba(0,229,160,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .badge {
+      display: inline-block;
+      background: rgba(0,229,160,0.1);
+      border: 1px solid rgba(0,229,160,0.25);
+      color: var(--accent);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(24px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -1px;
+      line-height: 1.2;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 15px;
+      margin-top: 10px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 720px;
+      position: relative;
+      z-index: 1;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      background: #0a0c11;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      padding: 14px 16px;
+      resize: vertical;
+      min-height: 100px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .example-chip {
+      background: rgba(79,124,255,0.08);
+      border: 1px solid rgba(79,124,255,0.2);
+      color: var(--accent2);
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .example-chip:hover {
+      background: rgba(79,124,255,0.18);
+      border-color: var(--accent2);
+    }
+
+    button#askBtn {
+      margin-top: 20px;
+      width: 100%;
+      background: var(--accent);
+      color: #0a0c11;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 14px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button#askBtn:hover { opacity: 0.88; }
+    button#askBtn:active { transform: scale(0.99); }
+    button#askBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .answer-section {
+      margin-top: 24px;
+      display: none;
+    }
+
+    .answer-box {
+      background: #0a0c11;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      padding: 18px 20px;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text);
+      animation: fadeIn 0.4s ease;
+    }
+
+    .error-box {
+      border-left-color: var(--error);
+      color: var(--error);
+    }
+
+    .loader {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 16px 0;
+    }
+
+    .dots span {
+      display: inline-block;
+      width: 7px; height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+      40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .meta {
+      text-align: center;
+      margin-top: 36px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      z-index: 1;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge">NLP · QUESTION ANSWERING</div>
+    <h1>Ask <span>FLAN-T5</span></h1>
+    <p class="subtitle">Powered by Google's FLAN-T5 language model</p>
+  </header>
+
+  <div class="card">
+    <label for="question">Your Question</label>
+    <textarea id="question" placeholder="e.g. What is the capital of France?"></textarea>
+
+    <div class="examples">
+      <span class="example-chip" onclick="setQ('What is machine learning?')">What is machine learning?</span>
+      <span class="example-chip" onclick="setQ('Who invented the telephone?')">Who invented the telephone?</span>
+      <span class="example-chip" onclick="setQ('What is photosynthesis?')">What is photosynthesis?</span>
+      <span class="example-chip" onclick="setQ('Explain gravity in simple terms.')">Explain gravity</span>
+    </div>
+
+    <button id="askBtn" onclick="askQuestion()">ASK →</button>
+
+    <div class="answer-section" id="answerSection">
+      <label style="margin-top:0; margin-bottom:10px;">Answer</label>
+      <div id="answerContent"></div>
+    </div>
+  </div>
+
+  <p class="meta">MODEL · google/flan-t5-base · FLASK API · localhost:5000</p>
+
+  <script>
+    function setQ(text) {
+      document.getElementById('question').value = text;
+    }
+
+    async function askQuestion() {
+      const question = document.getElementById('question').value.trim();
+      if (!question) return;
+
+      const btn = document.getElementById('askBtn');
+      const section = document.getElementById('answerSection');
+      const content = document.getElementById('answerContent');
+
+      btn.disabled = true;
+      section.style.display = 'block';
+      content.innerHTML = `
+        <div class="loader">
+          <div class="dots"><span></span><span></span><span></span></div>
+          Thinking...
+        </div>`;
+
+      try {
+        const res = await fetch('http://localhost:5000/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          content.innerHTML = `<div class="answer-box">${data.answer}</div>`;
+        } else {
+          content.innerHTML = `<div class="answer-box error-box">⚠ ${data.error || 'Something went wrong.'}</div>`;
+        }
+      } catch (err) {
+        content.innerHTML = `<div class="answer-box error-box">⚠ Could not connect to backend. Make sure Flask is running on port 5000.</div>`;
+      }
+
+      btn.disabled = false;
+    }
+
+    document.getElementById('question').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askQuestion(); }
+    });
+  </script>
+</body>
+</html>
